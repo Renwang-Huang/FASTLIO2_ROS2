@@ -22,6 +22,7 @@
 #include <yaml-cpp/yaml.h>
 
 using namespace std::chrono_literals;
+
 struct NodeConfig
 {
     std::string imu_topic = "/livox/imu";
@@ -30,6 +31,7 @@ struct NodeConfig
     std::string world_frame = "lidar";
     bool print_time_cost = false;
 };
+
 struct StateData
 {
     bool lidar_pushed = false;
@@ -127,6 +129,7 @@ public:
                                              timestamp);
         m_state_data.last_imu_time = timestamp;
     }
+    
     void lidarCB(const livox_ros_driver2::msg::CustomMsg::SharedPtr msg)
     {
         CloudType::Ptr cloud = Utils::livox2PCL(msg, m_builder_config.lidar_filter_num, m_builder_config.lidar_min_range, m_builder_config.lidar_max_range);

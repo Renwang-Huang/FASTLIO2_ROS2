@@ -2,6 +2,8 @@
 
 IMUProcessor::IMUProcessor(Config &config, std::shared_ptr<IESKF> kf) : m_config(config), m_kf(kf)
 {
+
+    // 分块设置协方差矩阵Q
     m_Q.setIdentity();
     m_Q.block<3, 3>(0, 0) = M3D::Identity() * m_config.ng;
     m_Q.block<3, 3>(3, 3) = M3D::Identity() * m_config.na;
@@ -15,6 +17,8 @@ IMUProcessor::IMUProcessor(Config &config, std::shared_ptr<IESKF> kf) : m_config
 
 bool IMUProcessor::initialize(SyncPackage &package)
 {
+
+    // 初始化IMU观测数据，包括加速度和角速度
     m_imu_cache.insert(m_imu_cache.end(), package.imus.begin(), package.imus.end());
     if (m_imu_cache.size() < static_cast<size_t>(m_config.imu_init_num))
         return false;
@@ -27,6 +31,8 @@ bool IMUProcessor::initialize(SyncPackage &package)
     }
     acc_mean /= static_cast<double>(m_imu_cache.size());
     gyro_mean /= static_cast<double>(m_imu_cache.size());
+
+    // 设置角速度零偏并决定世界坐标系Z轴向量是否与初始重力方向对齐
     m_kf->x().r_il = m_config.r_il;
     m_kf->x().t_il = m_config.t_il;
     m_kf->x().bg = gyro_mean;
@@ -37,6 +43,8 @@ bool IMUProcessor::initialize(SyncPackage &package)
     }
     else
         m_kf->x().initGravityDir(-acc_mean);
+    
+    // 设置协方差矩阵，分模块设置对于每一类初始化数据的信心
     m_kf->P().setIdentity();
     m_kf->P().block<3, 3>(6, 6) = M3D::Identity() * 0.00001;
     m_kf->P().block<3, 3>(9, 9) = M3D::Identity() * 0.00001;
@@ -50,7 +58,8 @@ bool IMUProcessor::initialize(SyncPackage &package)
 
 void IMUProcessor::undistort(SyncPackage &package)
 {
-
+    
+    // IMU以时序为依据的数据拼接
     m_imu_cache.clear();
     m_imu_cache.push_back(m_last_imu);
     m_imu_cache.insert(m_imu_cache.end(), package.imus.begin(), package.imus.end());
@@ -62,8 +71,9 @@ void IMUProcessor::undistort(SyncPackage &package)
     const double propagate_time_end = package.cloud_end_time;
 
     m_poses_cache.clear();
+    // 直接在队列末尾加入一组新的数据
     m_poses_cache.emplace_back(0.0, m_last_acc, m_last_gyro, m_kf->x().v, m_kf->x().t_wi, m_kf->x().r_wi);
-
+   
     V3D acc_val, gyro_val;
     double dt = 0.0;
     Input inp;
@@ -75,6 +85,8 @@ void IMUProcessor::undistort(SyncPackage &package)
         IMUData &tail = *(it_imu + 1);
         if (tail.time < m_last_propagate_end_time)
             continue;
+
+        // 使用梯形积分的思路提高精度
         gyro_val = 0.5 * (head.gyro + tail.gyro);
         acc_val = 0.5 * (head.acc + tail.acc);
 
@@ -82,7 +94,7 @@ void IMUProcessor::undistort(SyncPackage &package)
             dt = tail.time - m_last_propagate_end_time;
         else
             dt = tail.time - head.time;
-
+        
         inp.acc = acc_val;
         inp.gyro = gyro_val;
         m_kf->predict(inp, dt, m_Q);
@@ -102,6 +114,7 @@ void IMUProcessor::undistort(SyncPackage &package)
     V3D cur_t_wi = m_kf->x().t_wi;
     M3D cur_r_il = m_kf->x().r_il;
     V3D cur_t_il = m_kf->x().t_il;
+    // 从时间来看最晚的一个点
     auto it_pcl = package.cloud->points.end() - 1;
 
     for (auto it_kp = m_poses_cache.end() - 1; it_kp != m_poses_cache.begin(); it_kp--)

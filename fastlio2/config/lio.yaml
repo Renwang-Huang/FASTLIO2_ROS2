@@ -14,19 +14,22 @@ cube_len: 300
 det_range: 60
 move_thresh: 1.5
 
-na: 0.01
-ng: 0.01
-nba: 0.0001
-nbg: 0.0001
+na: 0.01   # 加速度计（Accelerometer）测量噪声标准差
+ng: 0.01   # 陀螺仪（Gyroscope）测量噪声标准差
+nba: 0.0001   # 加速度计零偏噪声（Bias noise）
+nbg: 0.0001   # 陀螺仪零偏噪声（Gyro bias noise）
 
 imu_init_num: 20
 near_search_num: 5
 ieskf_max_iter: 5
 
-gravity_align: true
+gravity_align: true   # 是否对齐初始观测的重力向量与世界坐标系的Z轴
 esti_il: false
 
-r_il: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-t_il: [-0.011, -0.02329, 0.04412]
+r_il: [1.0, 0.0, 0.0, 
+       0.0, 1.0, 0.0, 
+       0.0, 0.0, 1.0]   #Lidar-IMU外参旋转矩阵
+
+t_il: [-0.011, -0.02329, 0.04412]   # Lidar-IMU外参平移向量
 
 lidar_cov_inv: 1000.0

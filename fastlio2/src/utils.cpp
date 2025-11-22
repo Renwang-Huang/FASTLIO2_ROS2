@@ -1,4 +1,5 @@
 #include "utils.h"
+
 pcl::PointCloud<pcl::PointXYZINormal>::Ptr Utils::livox2PCL(const livox_ros_driver2::msg::CustomMsg::SharedPtr msg, int filter_num, double min_range, double max_range)
 {
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZINormal>);
@@ -30,6 +31,7 @@ double Utils::getSec(std_msgs::msg::Header &header)
 {
     return static_cast<double>(header.stamp.sec) + static_cast<double>(header.stamp.nanosec) * 1e-9;
 }
+
 builtin_interfaces::msg::Time Utils::getTime(const double &sec)
 {
     builtin_interfaces::msg::Time time_msg;

@@ -1,3 +1,5 @@
+// 顶层状态机，负责IMU初始化和建图初始化的状态调度
+
 #include "map_builder.h"
 MapBuilder::MapBuilder(Config &config, std::shared_ptr<IESKF> kf) : m_config(config), m_kf(kf)
 {
