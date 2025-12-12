@@ -1,61 +1,57 @@
 # FASTLIO2 ROS2
-## 主要工作
+
+## 仓库介绍
 1. 重构[FASTLIO2](https://github.com/hku-mars/FAST_LIO) 适配ROS2
 2. 添加回环节点，基于位置先验+ICP进行回环检测，基于GTSAM进行位姿图优化
 3. 添加重定位节点，基于由粗到细两阶段ICP进行重定位
 4. 增加一致性地图优化，基于[BLAM](https://github.com/hku-mars/BALM) (小场景地图) 和[HBA](https://github.com/hku-mars/HBA) (大场景地图)
 
-## 环境依赖
+## 系统环境
 1. Ubuntu 22.04
 2. ROS2 Humble
+3. cmake version 3.22.1
 
-## 编译依赖
+## 环境依赖
 ```text
-pcl
-Eigen
-sophus
-gtsam
-livox_ros_driver2
+请提前安装好：pcl和Eigen
 ```
-
-## 详细说明
-### 1.编译 LIVOX-SDK2
+### 1. LIVOX-SDK2
 ```shell
+make dir -p ~/LIVOX-SDK2/src && cd ~/LIVOX-SDK2/src
 git clone https://github.com/Livox-SDK/Livox-SDK2.git
 cd ./Livox-SDK2/
-mkdir build
-cd build
-cmake .. && make -j
-sudo make install
+mkdir build && cd build
+cmake .. && make -j   # 如果CPU资源不允许请执行cmake .. && make -j1
+sudo make install   # 不需要执行source操作
 ```
 
-### 2.编译 livox_ros_driver2
+### 2. livox_ros_driver2
 ```shell
-mkdir -r ws_livox/src
-git clone https://github.com/Livox-SDK/livox_ros_driver2.git ws_livox/src/livox_ros_driver2
-cd ws_livox/src/livox_ros_driver2
+mkdir -p ~/livox_ros_driver2/src && cd ~/livox_ros_driver2/src
+git clone https://github.com/Livox-SDK/livox_ros_driver2.git
+cd ~/livox_ros_driver2/src/livox_ros_driver2
 source /opt/ros/humble/setup.sh
-./build.sh humble
+./build.sh humble   # 自动执行安装脚本，编译结束之后需要在~/.bashrc当中进行source
 ```
 
-### 3.编译 Sophus
+### 3. Sophus
 ```shell
+mkdir -p ~/Sophus/src && cd ~/Sophus/src
 git clone https://github.com/strasdat/Sophus.git
 cd Sophus
 git checkout 1.22.10
 mkdir build && cd build
 cmake .. -DSOPHUS_USE_BASIC_LOGGING=ON
-make
+make # 这个编译会比较久，如果CPU吃力请执行make -j1
 sudo make install
 ```
-
-**新的Sophus依赖fmt，可以在CMakeLists.txt中添加add_compile_definitions(SOPHUS_USE_BASIC_LOGGING)去除，否则会报错**
-
+```text
+新的Sophus依赖fmt，可以在CMakeLists.txt中添加add_compile_definitions(SOPHUS_USE_BASIC_LOGGING)去除，否则会报错
+```
 
 ## 实例数据集
 ```text
 链接: https://pan.baidu.com/s/1rTTUlVwxi1ZNo7ZmcpEZ7A?pwd=t6yb 提取码: t6yb 
---来自百度网盘超级会员v7的分享
 ```
 
 ## 部分脚本
@@ -103,10 +99,5 @@ ros2 service call /hba/refine_map interface/srv/RefineMap "{"maps_path": "your m
 ```
 **如果需要调用优化服务，保存地图时需要设置save_patches为true**
 
-## 特别感谢
-1. [FASTLIO2](https://github.com/hku-mars/FAST_LIO)
-2. [BLAM](https://github.com/hku-mars/BALM)
-3. [HBA](https://github.com/hku-mars/HBA)
 ## 性能相关的问题
 该代码主要使用timerCB作为频率触发主函数，由于ROS2中的timer、subscriber以及service的回调实际上运行在同一个线程上，在电脑性能不是好的时候，会出现调用阻塞的情况，建议使用线程并发的方式将耗时的回调独立出来(如timerCB)来提升性能
-
