@@ -4,7 +4,7 @@
 #include <memory>
 #include <iostream>
 #include <chrono>
-// #include <filesystem>
+
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <livox_ros_driver2/msg/custom_msg.hpp>
@@ -22,6 +22,7 @@
 #include <yaml-cpp/yaml.h>
 
 using namespace std::chrono_literals;
+
 struct NodeConfig
 {
     std::string imu_topic = "/livox/imu";
@@ -30,6 +31,7 @@ struct NodeConfig
     std::string world_frame = "lidar";
     bool print_time_cost = false;
 };
+
 struct StateData
 {
     bool lidar_pushed = false;
@@ -116,17 +118,22 @@ public:
     void imuCB(const sensor_msgs::msg::Imu::SharedPtr msg)
     {
         std::lock_guard<std::mutex> lock(m_state_data.imu_mutex);
+        // 采用rclcpp::Time的策略计算时间差，得到纳秒级精度的示例
+        // rclcpp::Duration diff = rclcpp::Time(msg->header.stamp) - rclcpp::Time(last_header.stamp);
         double timestamp = Utils::getSec(msg->header);
         if (timestamp < m_state_data.last_imu_time)
         {
             RCLCPP_WARN(this->get_logger(), "IMU Message is out of order");
+            // 这里采用的策略是推导重来，重新构建新的IMU缓存序列，而不是丢弃存在时间戳问题（出现乱序问题）的IMU数据
             std::deque<IMUData>().swap(m_state_data.imu_buffer);
         }
+        // linear_acceleration被放大了10倍
         m_state_data.imu_buffer.emplace_back(V3D(msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z) * 10.0,
                                              V3D(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z),
                                              timestamp);
         m_state_data.last_imu_time = timestamp;
     }
+
     void lidarCB(const livox_ros_driver2::msg::CustomMsg::SharedPtr msg)
     {
         CloudType::Ptr cloud = Utils::livox2PCL(msg, m_builder_config.lidar_filter_num, m_builder_config.lidar_min_range, m_builder_config.lidar_max_range);
@@ -143,17 +150,24 @@ public:
 
     bool syncPackage()
     {
+        // IMU和Lidar数据是异步到达的，这里主要为了应对初始化瞬间的数据流不对齐，数据流稳定之后两个缓存序列就会稳定有数据
         if (m_state_data.imu_buffer.empty() || m_state_data.lidar_buffer.empty())
             return false;
+
         if (!m_state_data.lidar_pushed)
         {
+            // 提取队列最前方那一帧的点云数据
             m_package.cloud = m_state_data.lidar_buffer.front().second;
+            // 把无序的空间点集，整理成有序的时间流数据
             std::sort(m_package.cloud->points.begin(), m_package.cloud->points.end(), [](PointType &p1, PointType &p2)
                       { return p1.curvature < p2.curvature; });
+
             m_package.cloud_start_time = m_state_data.lidar_buffer.front().first;
             m_package.cloud_end_time = m_package.cloud_start_time + m_package.cloud->points.back().curvature / 1000.0;
             m_state_data.lidar_pushed = true;
         }
+        
+        // 必须保证Lidar数据缓存队列的所有数据，在IMU数据缓存队列中找到对应的数据戳，用以进行去畸变处理
         if (m_state_data.last_imu_time < m_package.cloud_end_time)
             return false;
 
@@ -163,6 +177,8 @@ public:
             m_package.imus.emplace_back(m_state_data.imu_buffer.front());
             m_state_data.imu_buffer.pop_front();
         }
+
+        // 数据打包完成之后丢弃旧数据防止重复处理
         m_state_data.lidar_buffer.pop_front();
         m_state_data.lidar_pushed = false;
         return true;
@@ -244,6 +260,7 @@ public:
     {
         if (!syncPackage())
             return;
+            
         auto t1 = std::chrono::high_resolution_clock::now();
         m_builder->process(m_package);
         auto t2 = std::chrono::high_resolution_clock::now();
